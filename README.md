@@ -149,37 +149,51 @@ bellamy/wallos:latest
 
 ### Docker Compose
 
+The included [`docker-compose.yaml`](docker-compose.yaml) is ready for one-click deployment on [Coolify](https://coolify.io): paste it into a **Service → Docker Compose Empty** resource, assign a domain, and deploy — Coolify wires up the subdomain, HTTPS, and persistent storage automatically. It also runs unchanged on any Docker host with `docker compose up`:
+
 ```
 services:
   wallos:
-    container_name: wallos
     image: bellamy/wallos:latest
-    ports:
-      - "8282:80/tcp"
-    environment:
-      TZ: 'America/Toronto'
-    # Volumes store your data between container upgrades
-    volumes:
-      - './db:/var/www/html/db'
-      - './logos:/var/www/html/images/uploads/logos'
     restart: unless-stopped
+    environment:
+      # Coolify magic — auto subdomain for this service, shown in the env UI.
+      SERVICE_URL_WALLOS:
+      # Editable, with a safe default so the file still runs outside Coolify.
+      TZ: "${TZ:-Europe/Berlin}"
+      # php-fpm runs as www-data (UID/PGID 82); expose to match your host user.
+      PUID: "${PUID:-82}"
+      PGID: "${PGID:-82}"
+    # No host port publish — the assigned domain (or a reverse proxy) routes container :80.
+    volumes:
+      - wallos_db:/var/www/html/db
+      - wallos_logos:/var/www/html/images/uploads/logos
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health.php"]
+      interval: 2m
+      timeout: 2s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  wallos_db:
+  wallos_logos:
 ```
+
+Note: this compose has no host port publish (`8282:80`), so it relies on a reverse proxy that routes to container port `80`. If you run it standalone and want to reach Wallos directly, add a `ports:` entry (`- "8282:80"`) or run the `docker run` command above, which publishes port `8282`.
 
 Disable healthcheck (optional, e.g., for Docker <25 or faster startup reporting):
 
 ```
 services:
   wallos:
-    container_name: wallos
     image: bellamy/wallos:latest
-    ports:
-      - "8282:80/tcp"
+    restart: unless-stopped
     environment:
       TZ: 'America/Toronto'
     volumes:
-      - './db:/var/www/html/db'
-      - './logos:/var/www/html/images/uploads/logos'
-    restart: unless-stopped
+      - wallos_db:/var/www/html/db
+      - wallos_logos:/var/www/html/images/uploads/logos
     healthcheck:
       test: ["NONE"]
 ```

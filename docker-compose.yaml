@@ -1,32 +1,40 @@
+# documentation: https://github.com/ellite/wallos
+# slogan: Open-source, self-hostable personal subscription tracker
+# category: productivity
+# tags: subscriptions,budget,finance,self-hosted
+# port: 80
+
 services:
   wallos:
-    container_name: wallos
     image: bellamy/wallos:latest
-    ports:
-      - "8282:80/tcp"
+    restart: unless-stopped
     environment:
-      TZ: 'America/Toronto'
-      # Optional OIDC environment variables
+      # Coolify magic — auto subdomain for this service, shown in the env UI.
+      SERVICE_URL_WALLOS:
+      # Editable, with a safe default so the file still runs outside Coolify.
+      TZ: "${TZ:-Europe/Berlin}"
+      # php-fpm runs as www-data (UID/PGID 82); expose to match your host user.
+      PUID: "${PUID:-82}"
+      PGID: "${PGID:-82}"
+      # ---- Optional OIDC (enable via Coolify env vars if you use SSO) ----
       # OIDC_ENABLED: "true"
       # OIDC_PROVIDER_NAME: "Authelia"
       # OIDC_CLIENT_ID: "wallos"
       # OIDC_CLIENT_SECRET: "replace-me"
-      # OIDC_CLIENT_SECRET_FILE: "/run/secrets/wallos_oidc_secret"
       # OIDC_ISSUER: "https://auth.example.com"
-      # OIDC_AUTH_URL: "https://auth.example.com/oauth2/authorize"
-      # OIDC_TOKEN_URL: "https://auth.example.com/oauth2/token"
-      # OIDC_USERINFO_URL: "https://auth.example.com/oauth2/userinfo"
       # OIDC_REDIRECT_URL: "https://wallos.example.com/index.php"
       # OIDC_LOGOUT_URL: "https://auth.example.com/logout"
-      # OIDC_USER_IDENTIFIER: "sub"
-      # OIDC_SCOPES: "openid email profile"
-      # OIDC_AUTO_CREATE_USER: "true"
-      # OIDC_DISABLE_PASSWORD_LOGIN: "false"
-      # OIDC_REQUIRE_EMAIL_VERIFIED: "true"
-      # Optional SSRF allowlist (overrides the Security Settings allowlist in the Admin UI)
-      # SSRF_ALLOWLIST: "auth.example.com,192.168.1.100:8123"
-    # Volumes store your data between container upgrades
+    # No host port publish — Traefik routes container :80 via the assigned domain.
     volumes:
-      - './db:/var/www/html/db'
-      - './logos:/var/www/html/images/uploads/logos'
-    restart: unless-stopped
+      - wallos_db:/var/www/html/db
+      - wallos_logos:/var/www/html/images/uploads/logos
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health.php"]
+      interval: 2m
+      timeout: 2s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  wallos_db:
+  wallos_logos:
